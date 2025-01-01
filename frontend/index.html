@@ -1,0 +1,159 @@
+<!-- Created by Kammar1006 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> Title </title>
+</head>
+<body>
+    
+    <h1> Hello World </h1>
+
+    <!-- Example Form for searching places using name -->
+    <h2> Search </h2>
+    <form id="form_1">
+        <p>
+            <span> Place Name </span>
+            <br>
+            <input id="form_1_name" value=""/>
+        </p>
+        <input id="form_1_button" type="submit" value="search"/>
+    </form>
+    <p id="places_list">  </p>
+    <hr>
+
+    <!-- Example login form -->
+    <h2> Login </h2>
+    <form id="form_2">
+        <p>
+            <span> Login </span>
+            <br>
+            <input id="form_2_login" value=""/>  
+        </p>
+        <p>
+            <span> Pass </span>
+            <br>
+            <input type="password" id="form_2_pass" value=""/>  
+        </p>
+        <input id="form_2_button" type="submit" value="login"/>
+    </form>
+    <p id="login_info">  </p>
+    <hr>
+
+    <!-- Example register form -->
+    <h2> Register </h2>
+    <form id="form_3">
+        <p>
+            <span> Login </span>
+            <br>
+            <input id="form_3_login" value=""/>  
+        </p>
+        <p>
+            <span> Pass </span>
+            <br>
+            <input type="password" id="form_3_pass" value=""/>  
+        </p>
+        <p>
+            <span> Pass2 </span>
+            <br>
+            <input type="password" id="form_3_pass2" value=""/>  
+        </p>
+        <p>
+            <span> Email </span>
+            <br>
+            <input id="form_3_email" value=""/>  
+        </p>
+        <input id="form_3_button" type="submit" value="register"/>
+    </form>
+    <p id="register_info">  </p>
+    <hr>
+    <input id="clicker" value="click" type="submit"/>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        (() => {
+            const sock = io();
+
+            //get data from backend
+            sock.on("places", (places) => {
+                console.log(places); //show in console
+                document.querySelector("#places_list").innerHTML = JSON.stringify(places);
+            });
+
+            sock.on("login", (e) => {
+                console.log(e);
+            });
+
+            sock.on("register", (e) => {
+                console.log(e);
+            });
+
+            sock.on("set-cookie", (cookie) => {
+                document.cookie = cookie;  // Set Cookie in client-site
+                console.log("Cookie", cookie);
+            });
+
+            sock.on("message", (t) => {
+                console.log("message: ", t);
+            });
+
+            //send info to backend - form 1
+            document
+                .querySelector("#form_1_button")
+                .addEventListener('click', (e) => {
+                    let name = document.querySelector("#form_1_name").value;
+                    sock.emit("searchByName", name);
+                });
+
+            //send info to backend - form 2 - login
+            document
+                .querySelector("#form_2_button")
+                .addEventListener('click', (e) => {
+                    let login = document.querySelector("#form_2_login").value;
+                    let pass = document.querySelector("#form_2_pass").value;
+                    sock.emit("login", login, pass);
+                });
+
+            //send info to backend - form 3 - register
+            document
+                .querySelector("#form_3_button")
+                .addEventListener('click', (e) => {
+                    let login = document.querySelector("#form_3_login").value;
+                    let pass = document.querySelector("#form_3_pass").value;
+                    let pass2 = document.querySelector("#form_3_pass2").value;
+                    let email = document.querySelector("#form_3_email").value;
+                    sock.emit("register", login, pass, pass2, email);
+                });
+
+            document
+                .querySelector("#clicker")
+                .addEventListener("click", (e) => {
+                    sock.emit("counter");
+                });
+        })();
+
+        //not reload site when click form
+        document
+            .querySelector("#form_1")
+            .addEventListener('submit', (e) => {
+                e.preventDefault();
+            });
+        document
+            .querySelector("#form_2")
+            .addEventListener('submit', (e) => {
+                e.preventDefault();
+            });
+        document
+            .querySelector("#form_3")
+            .addEventListener('submit', (e) => {
+                e.preventDefault();
+            });
+    
+    </script>
+</body>
+</html>
+
+
+
+

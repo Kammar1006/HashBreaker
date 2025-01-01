@@ -1,0 +1,19 @@
+{
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "express": "^4.21.1",
+    "mysql": "^2.18.1",
+    "socket.io": "^4.8.1"
+  },
+  "name": "nodebaseconnections",
+  "description": "Frontend, backend and db connection via node, express and socketio",
+  "version": "0.6",
+  "main": "index.js",
+  "devDependencies": {},
+  "scripts": {
+    "start": "node ./backend/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Kammar1006",
+  "license": "ISC"
+}
