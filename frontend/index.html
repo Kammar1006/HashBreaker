@@ -11,16 +11,25 @@
     <h1> Hello World </h1>
 
     <!-- Example Form for searching places using name -->
-    <h2> Search </h2>
+    <h2> BruteForce </h2>
     <form id="form_1">
         <p>
-            <span> Place Name </span>
+            <span> Hash</span>
             <br>
-            <input id="form_1_name" value=""/>
+            <input id="form_1_hash" value=""/>
+            <br>
+            <span> Charset </span>
+            <br>
+            <input id="form_1_charset" value=""/>
+            <br>
+            <span> Max Len </span>
+            <br>
+            <input id="form_1_maxlen" value=""/>
         </p>
         <input id="form_1_button" type="submit" value="search"/>
     </form>
-    <p id="places_list">  </p>
+    <p id="result">  </p>
+    <p id="try">  </p>
     <hr>
 
     <!-- Example login form -->
@@ -76,9 +85,14 @@
             const sock = io();
 
             //get data from backend
-            sock.on("places", (places) => {
-                console.log(places); //show in console
-                document.querySelector("#places_list").innerHTML = JSON.stringify(places);
+            sock.on("bruteForceResult", (result) => {
+                console.log(result); //show in console
+                document.querySelector("#result").innerHTML = JSON.stringify(result);
+            });
+
+            sock.on("bruteForceTry", (result) => {
+                console.log(result); //show in console
+                document.querySelector("#try").innerHTML = JSON.stringify(result);
             });
 
             sock.on("login", (e) => {
@@ -102,8 +116,10 @@
             document
                 .querySelector("#form_1_button")
                 .addEventListener('click', (e) => {
-                    let name = document.querySelector("#form_1_name").value;
-                    sock.emit("searchByName", name);
+                    let hash = document.querySelector("#form_1_hash").value;
+                    let charset = document.querySelector("#form_1_charset").value;
+                    let maxLen = document.querySelector("#form_1_maxlen").value;
+                    sock.emit("bruteForce", hash, charset, maxLen);
                 });
 
             //send info to backend - form 2 - login
@@ -153,7 +169,3 @@
     </script>
 </body>
 </html>
-
-
-
-

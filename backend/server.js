@@ -88,7 +88,7 @@ io.on('connection', (sock) => {
 		queryDatabase("SELECT * FROM users WHERE login =?", [login])
 		.then((res) => {
 			if(res && res.length == 1){
-				if(hashCompare(pass, res[0].pass)){
+				if(hashCompare(pass, res[0].password)){
 					console.log("Pass OKOK");
 					translationTab[cid].user_id = res[0].id;
 					translationTab[cid].db_stats = res[0];
@@ -154,7 +154,7 @@ io.on('connection', (sock) => {
 					} 
 				}
 				else{
-					queryDatabase("INSERT INTO `users` (`id`, `login`, `pass`, `email`) VALUES ('', ?, ?, ?)", [login, hasher(pass), email])
+					queryDatabase("INSERT INTO `users` (`id`, `login`, `password`, `email`) VALUES ('', ?, ?, ?)", [login, hasher(pass), email])
 					.then(() => {
 						sock.emit("register", "register");
 					}).catch((err) => {console.log("DB Error: "+err)});
@@ -173,14 +173,38 @@ io.on('connection', (sock) => {
 		sock.emit("logout");
 	});
 
-	//for all users searching db
-	sock.on("searchByName", (name) => {
-		if(isAlnum(name)){
-			queryDatabase("SELECT * FROM places WHERE name =?", [name])
-			.then((res) => {
-				sock.emit("places", res);
-			}).catch((err) => {console.log("DB Error: "+err);});
-		}
+	sock.on("bruteForce", (hash, charset, maxLen) => {
+		console.log(hash, charset, maxLen);
+
+		const crypto = require('crypto');
+	
+		const crackHash = (hash, charset, maxLen) => {
+			
+			let found = false;
+			const bruteForce = (prefix) => {
+				if (found || prefix.length > maxLen) return;
+	
+				charset.forEach((char) => {
+					const attempt = prefix + char;	
+					const attemptHash = crypto.createHash('md5').update(attempt).digest('hex'); // MD5 example
+					//console.log(attempt, attemptHash);
+					sock.emit("bruteForceTry", { attempt: attempt, hash: attemptHash });
+
+					if (attemptHash === hash) {
+						found = attempt;
+						sock.emit("bruteForceResult", { success: true, result: attempt });
+						return;
+					}
+	
+					bruteForce(attempt);
+				});
+			};
+	
+			bruteForce("");
+			if (!found) sock.emit("bruteForceResult", { success: false });
+		};
+	
+		crackHash(hash, charset.split(""), maxLen);
 	});
 
 	//for auth users sth:
