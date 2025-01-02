@@ -1,0 +1,90 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f9;
+    color: #333;
+}
+
+header {
+    width: 100%;
+    background-color: #333;
+    color: #fff;
+    padding: 10px 0;
+    text-align: center;
+}
+
+h2 {
+    color: #444;
+}
+
+form {
+    background: #fff;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 20px 0;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    width: 300px;
+}
+
+form p {
+    margin-bottom: 15px;
+}
+
+input[type="text"], 
+input[type="password"], 
+input[type="submit"] {
+    width: 100%;
+    padding: 10px;
+    margin-top: 5px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    box-sizing: border-box;
+}
+
+input[type="submit"] {
+    background-color: #4CAF50;
+    color: white;
+    cursor: pointer;
+}
+
+input[type="submit"]:hover {
+    background-color: #45a049;
+}
+
+#result, #try, #login_info, #register_info {
+    margin: 10px 0;
+    padding: 10px;
+    background-color: #e8f5e9;
+    border-left: 4px solid #4CAF50;
+    border-radius: 5px;
+    width: 300px;
+}
+
+#clicker {
+    margin-top: 20px;
+    padding: 10px;
+    background-color: #2196F3;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+#clicker:hover {
+    background-color: #1e88e5;
+}
+
+.flex{
+    display: flex;
+}
+
+.w50{
+    width: 50%;
+}
+
+.flex-c{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}

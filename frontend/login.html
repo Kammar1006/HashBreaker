@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> HashBreaker - Crypto Analysis Tool</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1> HashBreaker - Crypto Analysis Tool</h1>
+    </header>
+
+    <div class="flex">
+        <div class="w50 flex-c">
+            <h2>Login</h2>
+            <form id="form_2">
+                <p>
+                    <label for="form_2_login">Login:</label>
+                    <input id="form_2_login" type="text" placeholder="Enter login" required/>
+                </p>
+                <p>
+                    <label for="form_2_pass">Password:</label>
+                    <input id="form_2_pass" type="password" placeholder="Enter password" required/>
+                </p>
+                <input id="form_2_button" type="submit" value="Login"/>
+            </form>
+            <div id="login_info"></div>
+        </div>
+        <div class="w50 flex-c">
+            <h2>Register</h2>
+            <form id="form_3">
+                <p>
+                    <label for="form_3_login">Login:</label>
+                    <input id="form_3_login" type="text" placeholder="Enter login" required/>
+                </p>
+                <p>
+                    <label for="form_3_pass">Password:</label>
+                    <input id="form_3_pass" type="password" placeholder="Enter password" required/>
+                </p>
+                <p>
+                    <label for="form_3_pass2">Repeat Password:</label>
+                    <input id="form_3_pass2" type="password" placeholder="Repeat password" required/>
+                </p>
+                <p>
+                    <label for="form_3_email">Email:</label>
+                    <input id="form_3_email" type="text" placeholder="Enter email" required/>
+                </p>
+                <input id="form_3_button" type="submit" value="Register"/>
+            </form>
+            <div id="register_info"></div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        (() => {
+            const sock = io();
+
+            sock.on("login", (e) => {
+                document.querySelector("#login_info").textContent = `Login status: ${e}`;
+            });
+
+            sock.on("register", (e) => {
+                document.querySelector("#register_info").textContent = `Register status: ${e}`;
+            });
+
+            document.querySelector("#form_2").addEventListener('submit', (e) => {
+                e.preventDefault();
+                const login = document.querySelector("#form_2_login").value;
+                const pass = document.querySelector("#form_2_pass").value;
+                sock.emit("login", login, pass);
+            });
+
+            document.querySelector("#form_3").addEventListener('submit', (e) => {
+                e.preventDefault();
+                const login = document.querySelector("#form_3_login").value;
+                const pass = document.querySelector("#form_3_pass").value;
+                const pass2 = document.querySelector("#form_3_pass2").value;
+                const email = document.querySelector("#form_3_email").value;
+                sock.emit("register", login, pass, pass2, email);
+            });
+
+        })();
+    </script>
+</body>
+</html>
