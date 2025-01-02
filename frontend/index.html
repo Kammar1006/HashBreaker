@@ -58,7 +58,7 @@
                 const hash = document.querySelector("#form_1_hash").value;
                 const charset = document.querySelector("#form_1_charset").value;
                 const maxLen = document.querySelector("#form_1_maxlen").value;
-                sock.emit("bruteForce", hash, charset, maxLen);
+                sock.emit("bruteForce", hash, charset, maxLen, "sha256");
             });
 
         })();

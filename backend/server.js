@@ -173,23 +173,29 @@ io.on('connection', (sock) => {
 		sock.emit("logout");
 	});
 
-	sock.on("bruteForce", (hash, charset, maxLen) => {
-		console.log(hash, charset, maxLen);
-
-		const crypto = require('crypto');
+	sock.on("bruteForce", (hash, charset, maxLen, algorithm = "md5") => {
+		console.log(hash, charset, maxLen, algorithm);
 	
-		const crackHash = (hash, charset, maxLen) => {
-			
+		const crypto = require("crypto");
+	
+		const crackHash = (hash, charset, maxLen, algorithm) => {
+			// Usuwamy duplikaty z charset
+			charset = [...new Set(charset)];
+	
 			let found = false;
+	
 			const bruteForce = (prefix) => {
-				if (found || prefix.length > maxLen) return;
+				if (found || prefix.length >= maxLen) return;
 	
 				charset.forEach((char) => {
-					const attempt = prefix + char;	
-					const attemptHash = crypto.createHash('md5').update(attempt).digest('hex'); // MD5 example
-					//console.log(attempt, attemptHash);
+					const attempt = prefix + char;
+					const attemptHash = crypto
+						.createHash(algorithm)
+						.update(attempt)
+						.digest("hex");
+	
 					sock.emit("bruteForceTry", { attempt: attempt, hash: attemptHash });
-
+	
 					if (attemptHash === hash) {
 						found = attempt;
 						sock.emit("bruteForceResult", { success: true, result: attempt });
@@ -204,7 +210,7 @@ io.on('connection', (sock) => {
 			if (!found) sock.emit("bruteForceResult", { success: false });
 		};
 	
-		crackHash(hash, charset.split(""), maxLen);
+		crackHash(hash, charset.split(""), maxLen, algorithm);
 	});
 
 	//for auth users sth:
