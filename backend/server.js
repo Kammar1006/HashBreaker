@@ -62,7 +62,8 @@ const hashCompare = (data, hash) => {
 }
 const emit_login_data = (sock, db_stats) => {
 	let emit_db_stats = {...db_stats};
-	sock.emit("login", emit_db_stats); 
+	sock.emit("login",  "Login successful"); 
+	sock.emit("userStatus", { loggedIn: true, username: emit_db_stats.login });
 }
 
 io.on('connection', (sock) => {
@@ -75,10 +76,13 @@ io.on('connection', (sock) => {
 
 	console.log("User: "+cid);
 
-	sock.on("counter", () => {
-
-		translationTab[cid].test_counter++;
-		sock.emit("message", "Count: "+translationTab[cid].test_counter);
+	sock.on("checkUserStatus", () => {
+		const user = translationTab[cid];
+		if (user && user.user_id !== -1) {
+			sock.emit("userStatus", { loggedIn: true, username: user.db_stats.login });
+		} else {
+			sock.emit("userStatus", { loggedIn: false });
+		}
 	});
 
 	//login:
@@ -171,10 +175,14 @@ io.on('connection', (sock) => {
 		translationTab[cid].db_stats = {};
 		translationTab[cid].user_id = -1;
 		sock.emit("logout");
+		sock.emit("userStatus", { loggedIn: false });
 	});
 
 	sock.on("bruteForce", (hash, charset, maxLen, algorithm = "md5") => {
 		console.log(hash, charset, maxLen, algorithm);
+
+		if(algorithm != "md5" && algorithm != "sha1" && algorithm != "sha256" && algorithm != "sha256" && algorithm != "ripemd160")
+			algorithm = "md5";
 	
 		const crypto = require("crypto");
 	

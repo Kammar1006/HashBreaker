@@ -7,8 +7,17 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <header>
-        <h1> HashBreaker - Crypto Analysis Tool</h1>
+    <header class="flex">
+        <div class="w10"></div>
+        <div class="w80">
+            <h1> <a href="/"> HashBreaker - Crypto Analysis Tool </a></h1>
+        </div>
+        <div class="w10 flex-cc">
+            <nav id="user-status">
+                <a href="" id="login-link">Not Login</a>
+            </nav>
+            <input style="display: none;" type="submit" id="logout" value="logout">
+        </div>
     </header>
 
     <div class="flex">
@@ -57,6 +66,36 @@
         (() => {
             const sock = io();
 
+            let isLoggedIn = false;
+            let username = null;
+
+            sock.on("userStatus", (status) => {
+                
+                isLoggedIn = status.loggedIn;
+                if(isLoggedIn) window.location = "/";
+                username = status.username;
+                updateNav();
+            });
+
+            const updateNav = () => {
+                const nav = document.querySelector("#user-status");
+                const logout = document.querySelector("#logout");
+                if (isLoggedIn) {
+                    nav.innerHTML = `
+                        Login as: ${username}
+                    `;
+                    logout.style.display = "block";
+                } else {
+                    nav.innerHTML = `<a href="/login.html">Not Login</a>`;
+                    logout.style.display = "none";
+                }
+            };
+
+            document.querySelector("#logout").addEventListener("click", (e) => {
+                sock.emit("logout");
+                sock.emit("checkUserStatus");
+            });
+
             sock.on("login", (e) => {
                 document.querySelector("#login_info").textContent = `Login status: ${e}`;
             });
@@ -80,6 +119,8 @@
                 const email = document.querySelector("#form_3_email").value;
                 sock.emit("register", login, pass, pass2, email);
             });
+
+            sock.emit("checkUserStatus");
 
         })();
     </script>

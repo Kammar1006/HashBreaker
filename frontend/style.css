@@ -79,12 +79,37 @@ input[type="submit"]:hover {
     display: flex;
 }
 
+.w10{
+    width: 10%;
+}
+
 .w50{
     width: 50%;
+}
+
+.w80{
+    width: 80%;
 }
 
 .flex-c{
     display: flex;
     flex-direction: column;
     align-items: center;
+}
+
+.flex-cc{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+a{
+	color: inherit;	
+}
+a:link, .aa:link {
+	text-decoration: none;
+}
+a:hover, .aa:hover {
+	text-decoration: underline;
 }
