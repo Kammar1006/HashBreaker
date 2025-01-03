@@ -61,11 +61,15 @@ input[type="submit"]:hover {
     width: 300px;
 }
 
-#checkProgress{
+#checkProgress, #stopBruteForce{
     margin: 10px 0;
     padding: 10px;
     border-radius: 5px;
     width: 300px;
+}
+
+#stopBruteForce{
+    background-color: #a04549;
 }
 
 #clicker {

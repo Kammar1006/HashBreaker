@@ -5,9 +5,9 @@
     "mysql": "^2.18.1",
     "socket.io": "^4.8.1"
   },
-  "name": "nodebaseconnections",
-  "description": "Frontend, backend and db connection via node, express and socketio",
-  "version": "0.6",
+  "name": "hash-breaker",
+  "description": "",
+  "version": "0.4",
   "main": "index.js",
   "devDependencies": {},
   "scripts": {

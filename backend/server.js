@@ -26,6 +26,7 @@ const { randomBytes } = require('crypto');
 
 let translationTab = [];
 let progressData = {};
+let activeProcesses = {};
 
 const setCID = (sock) => {
 	//console.log(sock.request.headers.cookie);
@@ -180,44 +181,48 @@ io.on('connection', (sock) => {
 		sock.emit("userStatus", { loggedIn: false });
 	});
 
+
 	sock.on("bruteForce", (hash, charset, maxLen, algorithm = "md5") => {
 		console.log(hash, charset, maxLen, algorithm);
-	
+
 		const cid = setCID(sock);
 		const user = translationTab[cid];
 
-		if(progressData[cid]){
-			if(0 < progressData[cid].progress && progressData[cid].progress < 100){
-				sock.emit("bruteForceResult", { success: false, error: "Wait for earlier bruteforce method result" });
-				return;
-			}
+		// Sprawdź, czy istnieje już aktywny proces dla tego użytkownika
+		if (activeProcesses[cid]) {
+			sock.emit("bruteForceResult", { success: false, error: "Wait for earlier bruteforce method result" });
+			return;
 		}
 
-		progressData[cid] = { progress: 0, attempts: 0, totalCombinations: 0, found: null }; // Inicjalizacja progresu
+		activeProcesses[cid] = true; // Oznacz proces jako aktywny
+		progressData[cid] = { progress: 0, attempts: 0, totalCombinations: 0, found: null };
 
-		if(user && user.user_id !== -1){
-			if(maxLen > 8){
+		// Walidacja i inne ustawienia
+		if (user && user.user_id !== -1) {
+			if (maxLen > 8) {
+				delete activeProcesses[cid];
 				sock.emit("bruteForceResult", { success: false, error: "For auth users max len is 8" });
 				return;
-			} 
-		}
-		else{
-			if(maxLen > 5){
+			}
+		} else {
+			if (maxLen > 5) {
+				delete activeProcesses[cid];
 				sock.emit("bruteForceResult", { success: false, error: "Max len is 5. You may log in to increase max len to 8." });
 				return;
 			}
 		}
-	
+
 		if (!["md5", "sha1", "sha256", "sha512", "ripemd160"].includes(algorithm)) {
 			algorithm = "md5";
 		}
-	
+
 		maxLen = parseInt(maxLen, 10);
 		if (isNaN(maxLen) || maxLen < 1) {
+			delete activeProcesses[cid];
 			sock.emit("bruteForceResult", { success: false, error: "Invalid max length." });
 			return;
 		}
-	
+
 		const crypto = require("crypto");
 
 		const calculateTotalCombinations = (charsetLength, maxLen) => {
@@ -228,25 +233,18 @@ io.on('connection', (sock) => {
 			return total;
 		};
 
-		crackHash(hash, charset.split(""), maxLen, algorithm).catch(err => {
-			console.error("BruteForce Error:", err);
-			sock.emit("bruteForceResult", { success: false, error: "An error occurred during brute-force." });
-		});
-
 		async function crackHash(hash, charset, maxLen, algorithm) {
-			charset = [...new Set(charset)]; // Remove duplicates
+			charset = [...new Set(charset)];
 			const charsetLength = charset.length;
 			const totalCombinations = calculateTotalCombinations(charsetLength, maxLen);
 			let attempts = 0;
 			let found = false;
-	
-			// Generator to produce all combinations
+
 			function* generateCombinations(charset, maxLen) {
 				for (let len = 1; len <= maxLen; len++) {
 					const indices = Array(len).fill(0);
 					while (true) {
 						yield indices.map(i => charset[i]).join('');
-						// Increment indices
 						let pos = len - 1;
 						while (pos >= 0 && indices[pos] === charsetLength - 1) {
 							indices[pos] = 0;
@@ -257,14 +255,13 @@ io.on('connection', (sock) => {
 					}
 				}
 			}
-	
+
 			const combinations = generateCombinations(charset, maxLen);
-			let div = totalCombinations > 1e6 ? 10**Math.floor(Math.log10(totalCombinations))/1e3 : 1000;
-			if(div > 100000) div = 100000;
-			console.log("div by:", div);
+			let div = totalCombinations > 1e6 ? 10 ** Math.floor(Math.log10(totalCombinations)) / 1e3 : 1000;
+			if (div > 100000) div = 100000;
 
 			for (let attempt of combinations) {
-				if (found) break;
+				if (!activeProcesses[cid]) break; // Sprawdź, czy proces nie został przerwany
 
 				const attemptHash = crypto.createHash(algorithm).update(attempt).digest("hex");
 				attempts++;
@@ -287,16 +284,33 @@ io.on('connection', (sock) => {
 				}
 			}
 
-			if (!found) {
+			if (!found && activeProcesses[cid]) {
 				sock.emit("bruteForceResult", { success: false });
 				const progress = ((attempts / totalCombinations) * 100).toFixed(2);
 				sock.emit("bruteForceProgress", { progress: Math.min(progress, 100), attempts, totalCombinations, found });
 			}
 
-			// Na zakończenie ustawiamy finalny progres
+			delete activeProcesses[cid]; // Usuń aktywny proces
 			progressData[cid] = { progress: 100, attempts, totalCombinations, found };
 		}
+
+		crackHash(hash, charset.split(""), maxLen, algorithm).catch(err => {
+			console.error("BruteForce Error:", err);
+			sock.emit("bruteForceResult", { success: false, error: "An error occurred during brute-force." });
+			delete activeProcesses[cid];
+		});
 	});
+
+	sock.on("stopBruteForce", () => {
+		const cid = setCID(sock);
+		if (activeProcesses[cid]) {
+			delete activeProcesses[cid];
+			sock.emit("bruteForceResult", { success: false, error: "Brute-force stopped by user." });
+		} else {
+			sock.emit("bruteForceResult", { success: false, error: "No active brute-force process to stop." });
+		}
+	});
+
 
 	sock.on("getProgress", () => {
 		const cid = setCID(sock);

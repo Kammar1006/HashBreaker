@@ -48,9 +48,11 @@
                 </p>
                 <input id="form_1_button" type="submit" value="Search"/>
             </form>
+            <button id="stopBruteForce">Stop Brute Force</button>
             <div id="result"></div>
 
             <input id="checkProgress" type="submit" value="Check Progress"/>
+
             <!---<div id="try"></div>--->
             <div id="progress">Progress: 0%</div>
 
@@ -88,6 +90,10 @@
                 document.querySelector("#progress").textContent = `Progress: ${data.progress}% (Attempts: ${data.attempts}/${data.totalCombinations})`;
                 console.log(data);
                 document.querySelector("#result").textContent = `Result: ${data.found}`;
+            });
+
+            document.querySelector("#stopBruteForce").addEventListener("click", () => {
+                sock.emit("stopBruteForce");
             });
 
             const updateNav = () => {
