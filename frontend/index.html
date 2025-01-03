@@ -160,13 +160,14 @@
                     return;
                 }
 
-                sock.emit("dictionaryAttack", { hash, algorithm, dictionary });
-                document.querySelector("#result_2").innerHTML = "Dictionary attack started...";
+                sock.emit("dictionaryAttack", hash, algorithm, dictionary);
+                //document.querySelector("#result_2").innerHTML = "Dictionary attack started...";
             });
 
             // Wynik ataku słownikowego
             sock.on("dictionaryAttackResult", (data) => {
                 const resultDiv = document.querySelector("#result_2");
+                console.log(data)
                 if (data.success) {
                     resultDiv.innerHTML = `<span class="success">Password found: ${data.result}</span>`;
                 } else {

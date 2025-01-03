@@ -351,7 +351,7 @@ io.on('connection', (sock) => {
 
 	// Endpoint: Wykonaj atak słownikowy
 	sock.on("dictionaryAttack", (hash, algorithm = "md5", dictionaryName) => {
-
+		console.log(hash, algorithm, dictionaryName)
 		// Walidacja
 		if (!hash || !dictionaryName) {
 			sock.emit("dictionaryAttackResult", { success: false, error: "Invalid parameters." });
@@ -379,6 +379,7 @@ io.on('connection', (sock) => {
 			for (const password of passwords) {
 				if (found) break;
 				attempts++;
+				//console.log(password)
 				const attemptHash = crypto.createHash(algorithm).update(password.trim()).digest("hex");
 				if (attemptHash === hash) {
 					found = password.trim();
@@ -386,14 +387,14 @@ io.on('connection', (sock) => {
 					break;
 				}
 			}
-		});
 
-		stream.on("end", () => {
 			if (found) {
 				sock.emit("dictionaryAttackResult", { success: true, result: found });
-			} else {
-				sock.emit("dictionaryAttackResult", { success: false, error: "Password not found in dictionary." });
+				return;
 			}
+		});
+		stream.on("end", () => {
+			sock.emit("dictionaryAttackResult", { success: false, error: "Password not found in dictionary." });
 		});
 
 		stream.on("error", err => {
