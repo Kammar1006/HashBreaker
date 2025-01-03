@@ -181,6 +181,20 @@ io.on('connection', (sock) => {
 	sock.on("bruteForce", (hash, charset, maxLen, algorithm = "md5") => {
 		console.log(hash, charset, maxLen, algorithm);
 
+		const user = translationTab[cid];
+		if(user && user.user_id !== -1){
+			if(maxLen > 8){
+				sock.emit("bruteForceResult", { success: false, error: "For auth users max len is 8" });
+				return;
+			} 
+		}
+		else{
+			if(maxLen > 5){
+				sock.emit("bruteForceResult", { success: false, error: "Max len is 5. You may log in to increase max len to 8." });
+				return;
+			}
+		}
+
 		if(algorithm != "md5" && algorithm != "sha1" && algorithm != "sha256" && algorithm != "sha256" && algorithm != "ripemd160")
 			algorithm = "md5";
 	
@@ -237,5 +251,4 @@ io.on('connection', (sock) => {
 
 server.listen(PORT, () => {
 	console.log("Work");
-	
 });

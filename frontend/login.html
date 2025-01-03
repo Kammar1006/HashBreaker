@@ -77,6 +77,11 @@
                 updateNav();
             });
 
+            sock.on("set-cookie", (cookie) => {
+                document.cookie = cookie;  // Set Cookie in client-site
+                console.log("Cookie", cookie);
+            });
+
             const updateNav = () => {
                 const nav = document.querySelector("#user-status");
                 const logout = document.querySelector("#logout");
