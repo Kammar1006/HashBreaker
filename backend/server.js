@@ -25,6 +25,8 @@ const {isAlnum, isEmail, isLen} = require("./strings_analyzer.js");
 const { randomBytes } = require('crypto');
 
 let translationTab = [];
+let progressData = {};
+
 const setCID = (sock) => {
 	//console.log(sock.request.headers.cookie);
 	let cid;
@@ -183,6 +185,16 @@ io.on('connection', (sock) => {
 	
 		const cid = setCID(sock);
 		const user = translationTab[cid];
+
+		if(progressData[cid]){
+			if(0 < progressData[cid].progress && progressData[cid].progress < 100){
+				sock.emit("bruteForceResult", { success: false, error: "Wait for earlier bruteforce method result" });
+				return;
+			}
+		}
+
+		progressData[cid] = { progress: 0, attempts: 0, totalCombinations: 0, found: null }; // Inicjalizacja progresu
+
 		if(user && user.user_id !== -1){
 			if(maxLen > 8){
 				sock.emit("bruteForceResult", { success: false, error: "For auth users max len is 8" });
@@ -207,7 +219,7 @@ io.on('connection', (sock) => {
 		}
 	
 		const crypto = require("crypto");
-	
+
 		const calculateTotalCombinations = (charsetLength, maxLen) => {
 			let total = 0;
 			for (let k = 1; k <= maxLen; k++) {
@@ -215,8 +227,13 @@ io.on('connection', (sock) => {
 			}
 			return total;
 		};
-	
-		const crackHash = async (hash, charset, maxLen, algorithm) => {
+
+		crackHash(hash, charset.split(""), maxLen, algorithm).catch(err => {
+			console.error("BruteForce Error:", err);
+			sock.emit("bruteForceResult", { success: false, error: "An error occurred during brute-force." });
+		});
+
+		async function crackHash(hash, charset, maxLen, algorithm) {
 			charset = [...new Set(charset)]; // Remove duplicates
 			const charsetLength = charset.length;
 			const totalCombinations = calculateTotalCombinations(charsetLength, maxLen);
@@ -242,49 +259,64 @@ io.on('connection', (sock) => {
 			}
 	
 			const combinations = generateCombinations(charset, maxLen);
-	
+			let div = totalCombinations > 1e6 ? 10**Math.floor(Math.log10(totalCombinations))/1e3 : 1000;
+			if(div > 100000) div = 100000;
+			console.log("div by:", div);
+
 			for (let attempt of combinations) {
 				if (found) break;
-	
+
 				const attemptHash = crypto.createHash(algorithm).update(attempt).digest("hex");
 				attempts++;
-	
-				// Emit progress every 1000 attempts
-				if (attempts % 1000 === 0) {
+
+				if (attempts % div === 0) {
 					const progress = ((attempts / totalCombinations) * 100).toFixed(2);
-					sock.emit("bruteForceProgress", { progress: Math.min(progress, 100), attempts });
+					progressData[cid] = { progress, attempts, totalCombinations, found };
 				}
-	
-				sock.emit("bruteForceTry", { attempt, hash: attemptHash });
-	
+
 				if (attemptHash === hash) {
 					found = attempt;
 					sock.emit("bruteForceResult", { success: true, result: attempt });
 					const progress = ((attempts / totalCombinations) * 100).toFixed(2);
-					sock.emit("bruteForceProgress", { progress: Math.min(progress, 100), attempts });
+					sock.emit("bruteForceProgress", { progress: Math.min(progress, 100), attempts, totalCombinations, found });
 					break;
 				}
-	
-				// Optional: Yield control to avoid blocking
+
 				if (attempts % 10000 === 0) {
 					await new Promise(resolve => setImmediate(resolve));
 				}
 			}
-	
+
 			if (!found) {
 				sock.emit("bruteForceResult", { success: false });
 				const progress = ((attempts / totalCombinations) * 100).toFixed(2);
-				sock.emit("bruteForceProgress", { progress: Math.min(progress, 100), attempts });
+				sock.emit("bruteForceProgress", { progress: Math.min(progress, 100), attempts, totalCombinations, found });
 			}
-		};
-	
-		crackHash(hash, charset.split(""), maxLen, algorithm).catch(err => {
-			console.error("BruteForce Error:", err);
-			sock.emit("bruteForceResult", { success: false, error: "An error occurred during brute-force." });
-		});
+
+			// Na zakończenie ustawiamy finalny progres
+			progressData[cid] = { progress: 100, attempts, totalCombinations, found };
+		}
 	});
-	
-	
+
+	sock.on("getProgress", () => {
+		const cid = setCID(sock);
+		const data = progressData[cid];
+		if (data) {
+			sock.emit("bruteForceProgress", data);
+		} else {
+			sock.emit("bruteForceProgress", { progress: 0, attempts: 0, totalCombinations: 0, found: null });
+		}
+	});
+
+	sock.on("resumeSession", () => {
+		const cid = setCID(sock);
+		const progress = progressData[cid];
+		if (progress) {
+			sock.emit("bruteForceProgress", progress);
+		} else {
+			sock.emit("bruteForceResult", { success: false, error: "No active session found." });
+		}
+	});
 
 	//for auth users sth:
 	sock.on("auth_user_only", (some_data) => {
