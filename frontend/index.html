@@ -49,7 +49,9 @@
                 <input id="form_1_button" type="submit" value="Search"/>
             </form>
             <div id="result"></div>
-            <div id="try"></div>
+            <!---<div id="try"></div>--->
+            <div id="progress">Progress: 0%</div>
+
         </div>
         <div class="w50 flex-c">
             <h2>Dictionary</h2>
@@ -101,9 +103,15 @@
                 document.querySelector("#result").textContent = `Result: ${JSON.stringify(result)}`;
             });
 
-            sock.on("bruteForceTry", (result) => {
+            /*sock.on("bruteForceTry", (result) => {
                 document.querySelector("#try").textContent = `Try: ${JSON.stringify(result)}`;
+            });*/
+
+            sock.on("bruteForceProgress", (data) => {
+                const progressDiv = document.querySelector("#progress");
+                progressDiv.textContent = `Progress: ${data.progress}% (${data.attempts} attempts)`;
             });
+
 
             // Emit events
             document.querySelector("#form_1").addEventListener('submit', (e) => {

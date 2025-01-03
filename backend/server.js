@@ -180,7 +180,8 @@ io.on('connection', (sock) => {
 
 	sock.on("bruteForce", (hash, charset, maxLen, algorithm = "md5") => {
 		console.log(hash, charset, maxLen, algorithm);
-
+	
+		const cid = setCID(sock);
 		const user = translationTab[cid];
 		if(user && user.user_id !== -1){
 			if(maxLen > 8){
@@ -194,46 +195,96 @@ io.on('connection', (sock) => {
 				return;
 			}
 		}
-
-		if(algorithm != "md5" && algorithm != "sha1" && algorithm != "sha256" && algorithm != "sha256" && algorithm != "ripemd160")
+	
+		if (!["md5", "sha1", "sha256", "sha512", "ripemd160"].includes(algorithm)) {
 			algorithm = "md5";
+		}
+	
+		maxLen = parseInt(maxLen, 10);
+		if (isNaN(maxLen) || maxLen < 1) {
+			sock.emit("bruteForceResult", { success: false, error: "Invalid max length." });
+			return;
+		}
 	
 		const crypto = require("crypto");
 	
-		const crackHash = (hash, charset, maxLen, algorithm) => {
-			// Usuwamy duplikaty z charset
-			charset = [...new Set(charset)];
-	
-			let found = false;
-	
-			const bruteForce = (prefix) => {
-				if (found || prefix.length >= maxLen) return;
-	
-				charset.forEach((char) => {
-					const attempt = prefix + char;
-					const attemptHash = crypto
-						.createHash(algorithm)
-						.update(attempt)
-						.digest("hex");
-	
-					sock.emit("bruteForceTry", { attempt: attempt, hash: attemptHash });
-	
-					if (attemptHash === hash) {
-						found = attempt;
-						sock.emit("bruteForceResult", { success: true, result: attempt });
-						return;
-					}
-	
-					bruteForce(attempt);
-				});
-			};
-	
-			bruteForce("");
-			if (!found) sock.emit("bruteForceResult", { success: false });
+		const calculateTotalCombinations = (charsetLength, maxLen) => {
+			let total = 0;
+			for (let k = 1; k <= maxLen; k++) {
+				total += Math.pow(charsetLength, k);
+			}
+			return total;
 		};
 	
-		crackHash(hash, charset.split(""), maxLen, algorithm);
+		const crackHash = async (hash, charset, maxLen, algorithm) => {
+			charset = [...new Set(charset)]; // Remove duplicates
+			const charsetLength = charset.length;
+			const totalCombinations = calculateTotalCombinations(charsetLength, maxLen);
+			let attempts = 0;
+			let found = false;
+	
+			// Generator to produce all combinations
+			function* generateCombinations(charset, maxLen) {
+				for (let len = 1; len <= maxLen; len++) {
+					const indices = Array(len).fill(0);
+					while (true) {
+						yield indices.map(i => charset[i]).join('');
+						// Increment indices
+						let pos = len - 1;
+						while (pos >= 0 && indices[pos] === charsetLength - 1) {
+							indices[pos] = 0;
+							pos--;
+						}
+						if (pos < 0) break;
+						indices[pos]++;
+					}
+				}
+			}
+	
+			const combinations = generateCombinations(charset, maxLen);
+	
+			for (let attempt of combinations) {
+				if (found) break;
+	
+				const attemptHash = crypto.createHash(algorithm).update(attempt).digest("hex");
+				attempts++;
+	
+				// Emit progress every 1000 attempts
+				if (attempts % 1000 === 0) {
+					const progress = ((attempts / totalCombinations) * 100).toFixed(2);
+					sock.emit("bruteForceProgress", { progress: Math.min(progress, 100), attempts });
+				}
+	
+				sock.emit("bruteForceTry", { attempt, hash: attemptHash });
+	
+				if (attemptHash === hash) {
+					found = attempt;
+					sock.emit("bruteForceResult", { success: true, result: attempt });
+					const progress = ((attempts / totalCombinations) * 100).toFixed(2);
+					sock.emit("bruteForceProgress", { progress: Math.min(progress, 100), attempts });
+					break;
+				}
+	
+				// Optional: Yield control to avoid blocking
+				if (attempts % 10000 === 0) {
+					await new Promise(resolve => setImmediate(resolve));
+				}
+			}
+	
+			if (!found) {
+				sock.emit("bruteForceResult", { success: false });
+				const progress = ((attempts / totalCombinations) * 100).toFixed(2);
+				sock.emit("bruteForceProgress", { progress: Math.min(progress, 100), attempts });
+			}
+		};
+	
+		crackHash(hash, charset.split(""), maxLen, algorithm).catch(err => {
+			console.error("BruteForce Error:", err);
+			sock.emit("bruteForceResult", { success: false, error: "An error occurred during brute-force." });
+		});
 	});
+	
+	
 
 	//for auth users sth:
 	sock.on("auth_user_only", (some_data) => {
