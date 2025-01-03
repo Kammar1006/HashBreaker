@@ -10,6 +10,9 @@ const express = require('express');
 const http = require('http');
 const socketio = require('socket.io');
 
+const fs = require("fs");
+const path = require("path");
+
 const {queryDatabase} = require('./db.js');
 const bcrypt = require("bcrypt");
 
@@ -23,6 +26,8 @@ const io = socketio(server, {
 
 const {isAlnum, isEmail, isLen} = require("./strings_analyzer.js");
 const { randomBytes } = require('crypto');
+
+const dictionariesPath = path.join(__dirname, "dictionaries");
 
 let translationTab = [];
 let progressData = {};
@@ -331,6 +336,91 @@ io.on('connection', (sock) => {
 			sock.emit("bruteForceResult", { success: false, error: "No active session found." });
 		}
 	});
+
+	// Endpoint: Pobierz listę słowników
+	sock.on("getDictionaries", () => {
+		fs.readdir(dictionariesPath, (err, files) => {
+			if (err) {
+				sock.emit("dictionaryList", { success: false, error: "Unable to read dictionaries." });
+				return;
+			}
+			const dictionaries = files.filter(file => file.endsWith(".txt"));
+			sock.emit("dictionaryList", { success: true, dictionaries });
+		});
+	});
+
+	// Endpoint: Wykonaj atak słownikowy
+	sock.on("dictionaryAttack", (hash, algorithm = "md5", dictionaryName) => {
+
+		// Walidacja
+		if (!hash || !dictionaryName) {
+			sock.emit("dictionaryAttackResult", { success: false, error: "Invalid parameters." });
+			return;
+		}
+
+		const dictionaryPath = path.join(dictionariesPath, dictionaryName);
+		if (!fs.existsSync(dictionaryPath)) {
+			sock.emit("dictionaryAttackResult", { success: false, error: "Dictionary not found." });
+			return;
+		}
+
+		if (!["md5", "sha1", "sha256", "sha512", "ripemd160"].includes(algorithm)) {
+			algorithm = "md5";
+		}
+
+		// Wykonywanie ataku
+		const crypto = require("crypto");
+		const stream = fs.createReadStream(dictionaryPath, { encoding: "utf-8" });
+		let attempts = 0;
+		let found = null;
+
+		stream.on("data", chunk => {
+			const passwords = chunk.split("\n");
+			for (const password of passwords) {
+				if (found) break;
+				attempts++;
+				const attemptHash = crypto.createHash(algorithm).update(password.trim()).digest("hex");
+				if (attemptHash === hash) {
+					found = password.trim();
+					stream.destroy();
+					break;
+				}
+			}
+		});
+
+		stream.on("end", () => {
+			if (found) {
+				sock.emit("dictionaryAttackResult", { success: true, result: found });
+			} else {
+				sock.emit("dictionaryAttackResult", { success: false, error: "Password not found in dictionary." });
+			}
+		});
+
+		stream.on("error", err => {
+			sock.emit("dictionaryAttackResult", { success: false, error: "Error reading dictionary." });
+		});
+	});
+
+	// Endpoint: Wgraj nowy słownik
+	sock.on("uploadDictionary", (fileName, fileContent) => {
+		const user = translationTab[cid];
+
+		// Sprawdź, czy użytkownik jest adminem
+		if (!user || user.is_admin !== "admin") {
+			sock.emit("uploadDictionaryResult", { success: false, error: "Only admins can upload dictionaries." });
+			return;
+		}
+
+		const filePath = path.join(dictionariesPath, fileName);
+		fs.writeFile(filePath, fileContent, (err) => {
+			if (err) {
+				sock.emit("uploadDictionaryResult", { success: false, error: "Failed to save dictionary." });
+				return;
+			}
+			sock.emit("uploadDictionaryResult", { success: true, message: "Dictionary uploaded successfully." });
+		});
+	});
+
 
 	//for auth users sth:
 	sock.on("auth_user_only", (some_data) => {

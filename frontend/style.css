@@ -52,7 +52,7 @@ input[type="submit"]:hover {
     background-color: #45a049;
 }
 
-#result, #try, #login_info, #register_info {
+#result, #try, #login_info, #register_info, #result_2 {
     margin: 10px 0;
     padding: 10px;
     background-color: #e8f5e9;
@@ -61,14 +61,14 @@ input[type="submit"]:hover {
     width: 300px;
 }
 
-#checkProgress, #stopBruteForce{
+#checkProgress, #stopBruteForce, #checkProgress_2, #stopDictionaryAttack{
     margin: 10px 0;
     padding: 10px;
     border-radius: 5px;
     width: 300px;
 }
 
-#stopBruteForce{
+#stopBruteForce, #stopDictionaryAttack{
     background-color: #a04549;
 }
 

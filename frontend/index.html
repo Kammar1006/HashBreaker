@@ -58,8 +58,46 @@
 
         </div>
         <div class="w50 flex-c">
-            <h2>Dictionary</h2>
-            <h2>(SOON)</h2>
+            <h2>Dictionary Attack</h2>
+            <form id="form_2">
+                <p>
+                    <label for="form_2_hash">Hash:</label>
+                    <input id="form_2_hash" type="text" placeholder="Enter hash" required />
+                </p>
+                <p>
+                    <label for="form_2_algorithm">Algorithm:</label>
+                    <select id="form_2_algorithm">
+                        <option value="md5" selected>MD5</option>
+                        <option value="sha1">SHA-1</option>
+                        <option value="sha256">SHA-256</option>
+                        <option value="sha512">SHA-512</option>
+                        <option value="ripemd160">RIPEMD-160</option>
+                    </select>
+                </p>
+                <p>
+                    <label for="form_2_dictionary">Dictionary:</label>
+                    <select id="form_2_dictionary">
+                        <!-- List of dictionaries will be dynamically populated -->
+                    </select>
+                </p>
+                <input id="form_2_button" type="submit" value="Search" />
+            </form>
+            <button id="stopDictionaryAttack">Stop Dictionary Attack</button>
+            <div id="result_2"></div>
+        
+            <input id="checkProgress_2" type="submit" value="Check Progress" />
+        
+            <div id="progress_2">Progress: 0%</div>
+
+            
+            <form id="uploadDictionaryForm">
+                <h3>Upload Dictionary</h3>
+                <p>
+                    <label for="uploadDictionary"> Choose file </label>
+                    <input type="file" id="uploadDictionary" required>
+                </p>
+                <input type="submit" value="Upload"/>
+            </form>
         </div>
     </div>
 
@@ -96,6 +134,78 @@
                 sock.emit("stopBruteForce");
             });
 
+            // Pobierz listę słowników
+            sock.emit("getDictionaries");
+
+            sock.on("dictionaryList", (data) => {
+                const resultDiv = document.querySelector("#result_2");
+                if (data.success) {
+                    const select = document.querySelector("#form_2_dictionary");
+                    select.innerHTML = data.dictionaries.map(dict => `<option value="${dict}">${dict}</option>`).join("");
+                    resultDiv.innerHTML = "Dictionaries loaded successfully.";
+                } else {
+                    resultDiv.innerHTML = `<span class="error">${data.error}</span>`;
+                }
+            });
+
+            // Rozpocznij atak słownikowy
+            document.querySelector("#form_2_button").addEventListener("click", (event) => {
+                event.preventDefault();
+                const hash = document.querySelector("#form_2_hash").value;
+                const algorithm = document.querySelector("#form_2_algorithm").value;
+                const dictionary = document.querySelector("#form_2_dictionary").value;
+
+                if (!hash || !dictionary) {
+                    document.querySelector("#result_2").innerHTML = `<span class="error">Please provide a hash and select a dictionary.</span>`;
+                    return;
+                }
+
+                sock.emit("dictionaryAttack", { hash, algorithm, dictionary });
+                document.querySelector("#result_2").innerHTML = "Dictionary attack started...";
+            });
+
+            // Wynik ataku słownikowego
+            sock.on("dictionaryAttackResult", (data) => {
+                const resultDiv = document.querySelector("#result_2");
+                if (data.success) {
+                    resultDiv.innerHTML = `<span class="success">Password found: ${data.result}</span>`;
+                } else {
+                    resultDiv.innerHTML = `<span class="error">${data.error}</span>`;
+                }
+            });
+
+            // Upload słownika
+            document.querySelector("#uploadDictionaryForm").addEventListener("submit", (event) => {
+                event.preventDefault(); // Zapobiegamy przeładowaniu strony
+
+                const fileInput = document.querySelector("#uploadDictionary");
+                const file = fileInput.files[0];
+                const resultDiv = document.querySelector("#result_2");
+
+                if (!file) {
+                    resultDiv.innerHTML = `<span class="error">No file selected for upload.</span>`;
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function () {
+                    sock.emit("uploadDictionary", { name: file.name, content: reader.result });
+                    resultDiv.innerHTML = "Uploading dictionary...";
+                };
+
+                reader.readAsText(file);
+            });
+
+            sock.on("uploadDictionaryResult", (data) => {
+                const resultDiv = document.querySelector("#result_2");
+                if (data.success) {
+                    resultDiv.innerHTML = `<span class="success">${data.message}</span>`;
+                } else {
+                    resultDiv.innerHTML = `<span class="error">${data.error}</span>`;
+                }
+            });
+
+
             const updateNav = () => {
                 const nav = document.querySelector("#user-status");
                 const logout = document.querySelector("#logout");
@@ -110,11 +220,11 @@
                 }
             };
 
-                document.querySelector("#logout").addEventListener("click", (e) => {
-                    console.log("logout")
-                    sock.emit("logout");
-                    sock.emit("userStatus", { loggedIn: false });
-                });
+            document.querySelector("#logout").addEventListener("click", (e) => {
+                console.log("logout")
+                sock.emit("logout");
+                sock.emit("userStatus", { loggedIn: false });
+            });
 
             // Backend responses
             sock.on("bruteForceResult", (result) => {
