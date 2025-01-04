@@ -188,7 +188,6 @@ io.on('connection', (sock) => {
 		sock.emit("userStatus", { loggedIn: false });
 	});
 
-
 	sock.on("bruteForce", (hash, charset, maxLen, algorithm = "md5") => {
 		console.log(hash, charset, maxLen, algorithm);
 
@@ -374,9 +373,8 @@ io.on('connection', (sock) => {
 
 	// Endpoint: Wykonaj atak słownikowy
 	sock.on("dictionaryAttack", async (hash, algorithm = "md5", dictionaryName) => {
-		console.log(hash, algorithm, dictionaryName);
+		console.log(`[Dictionary Attack] Start: hash=${hash}, algorithm=${algorithm}, dictionary=${dictionaryName}`);
 	
-		// Walidacja
 		if (!hash || !dictionaryName) {
 			sock.emit("dictionaryAttackResult", { success: false, error: "Invalid parameters." });
 			return;
@@ -393,12 +391,22 @@ io.on('connection', (sock) => {
 		}
 	
 		const crypto = require("crypto");
-		const totalCombinations = fs.readFileSync(dictionaryPath, 'utf-8').split("\n").length; // Liczba linii w słowniku
+		sock.emit("dictionaryAttackResult", { success: false, error: "Loading Dictionary...." });
+		const totalCombinations = fs.readFileSync(dictionaryPath, "utf-8").split("\n").length;
+		sock.emit("dictionaryAttackResult", { success: false, error: "Dictionary Loaded" });
 		let attempts = 0;
 		let found = null;
 	
-		dictionaryActiveProcesses[cid] = true; // Oznacz proces jako aktywny
+		const cid = setCID(sock);
+		dictionaryActiveProcesses[cid] = true;
 		dictionaryProgressData[cid] = { progress: 0, attempts: 0, totalCombinations, found: null };
+	
+		const updateProgress = () => {
+			const progress = ((attempts / totalCombinations) * 100).toFixed(2);
+			dictionaryProgressData[cid] = { progress, attempts, totalCombinations, found };
+			sock.emit("dictionaryProgress", dictionaryProgressData[cid]);
+			//console.log(`[Progress] CID: ${cid}, Progress: ${progress}%, Attempts: ${attempts}/${totalCombinations}`);
+		};
 	
 		const processChunk = async (chunk) => {
 			const passwords = chunk.split("\n");
@@ -413,40 +421,68 @@ io.on('connection', (sock) => {
 				}
 	
 				if (attempts % 100 === 0) {
-					const progress = ((attempts / totalCombinations) * 100).toFixed(2);
-					dictionaryProgressData[cid] = { progress, attempts, totalCombinations, found };
-					sock.emit("dictionaryProgress", dictionaryProgressData[cid]);
+					updateProgress();
+					await new Promise(resolve => setImmediate(resolve)); // Prevent blocking
 				}
 			}
 		};
 	
 		try {
-			const stream = fs.createReadStream(dictionaryPath, { encoding: "utf-8" });
+			const stream = fs.createReadStream(dictionaryPath, { encoding: "utf-8", highWaterMark: 16 * 1024 });
 	
-			for await (const chunk of stream) {
+			stream.on("data", async (chunk) => {
+				console.log(`[Dictionary Attack] Processing chunk of size: ${chunk.length}`);
 				if (!dictionaryActiveProcesses[cid]) {
-					sock.emit("dictionaryAttackResult", { success: false, error: "Attack stopped by user." });
-					delete dictionaryActiveProcesses[cid];
+					console.log(`[Dictionary Attack] CID: ${cid}, Stopped by user.`);
+					stream.destroy(); // Zniszcz strumień, gdy użytkownik zatrzyma atak
 					return;
 				}
-	
 				await processChunk(chunk);
-	
-				if (found) break;
+				if (found) {
+					console.log(`[Dictionary Attack] CID: ${cid}, Password found.`);
+					stream.destroy(); // Zniszcz strumień po znalezieniu hasła
+				}
+			});
+			
+			// Obsługa zakończenia strumienia
+			stream.on("end", () => {
+				console.log(`[Dictionary Attack] CID: ${cid}, Stream ended.`);
+				if (!found) {
+					sock.emit("dictionaryAttackResult", { success: false, error: "Password not found in dictionary." });
+				}
+				finalizeAttack();
+			});
+			
+			// Obsługa zniszczenia strumienia (stream.destroy())
+			stream.on("close", () => {
+				console.log(`[Dictionary Attack] CID: ${cid}, Stream closed.`);
+				if (found) {
+					sock.emit("dictionaryAttackResult", { success: true, result: found });
+				} else {
+					sock.emit("dictionaryAttackResult", { success: false, error: "Password not found in dictionary." });
+				}
+				finalizeAttack();
+			});
+			
+			// Finalizacja ataku
+			function finalizeAttack() {
+				dictionaryProgressData[cid] = { progress: 100, attempts, totalCombinations, found };
+				delete dictionaryActiveProcesses[cid];
 			}
 	
-			if (found) {
-				sock.emit("dictionaryAttackResult", { success: true, result: found });
-			} else {
-				sock.emit("dictionaryAttackResult", { success: false, error: "Password not found in dictionary." });
-			}
+			stream.on("error", (err) => {
+				console.error(`[Dictionary Attack] CID: ${cid}, Stream error:`, err);
+				sock.emit("dictionaryAttackResult", { success: false, error: "Error reading dictionary." });
+				delete dictionaryActiveProcesses[cid];
+			});
 		} catch (err) {
-			sock.emit("dictionaryAttackResult", { success: false, error: "Error reading dictionary." });
-		} finally {
-			dictionaryProgressData[cid] = { progress: 100, attempts, totalCombinations, found };
+			console.error(`[Dictionary Attack] CID: ${cid}, Error:`, err);
+			sock.emit("dictionaryAttackResult", { success: false, error: "Unexpected error during attack." });
 			delete dictionaryActiveProcesses[cid];
 		}
 	});
+	
+	
 	
 
 	// Endpoint: Wgraj nowy słownik
