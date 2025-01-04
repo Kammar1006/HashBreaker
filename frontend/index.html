@@ -204,7 +204,7 @@
 
                 const reader = new FileReader();
                 reader.onload = function () {
-                    sock.emit("uploadDictionary", { name: file.name, content: reader.result });
+                    sock.emit("uploadDictionary", file.name, reader.result );
                     resultDiv.innerHTML = "Uploading dictionary...";
                 };
 
@@ -218,6 +218,7 @@
                 } else {
                     resultDiv.innerHTML = `<span class="error">${data.error}</span>`;
                 }
+                sock.emit("getDictionaries");
             });
 
 

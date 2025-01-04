@@ -227,7 +227,6 @@ io.on('connection', (sock) => {
 			}
 		}
 
-		// Walidacja i inne ustawienia
 		if (user) {
 			if(maxLen > permissions(cid, "bruteforce_max_len")){
 				sock.emit("bruteForceResult", `For ${getRole(cid)} users max bruteforce length is ${permissions(cid, "bruteforce_max_len")}`);
@@ -246,13 +245,12 @@ io.on('connection', (sock) => {
 			return;
 		}
 
-		// Sprawdź, czy istnieje już aktywny proces dla tego użytkownika
 		if (activeProcesses[cid]) {
 			sock.emit("bruteForceResult", { success: false, error: "Wait for earlier bruteforce method result" });
 			return;
 		}
 
-		activeProcesses[cid] = true; // Oznacz proces jako aktywny
+		activeProcesses[cid] = true;
 		progressData[cid] = { progress: 0, attempts: 0, totalCombinations: 0, found: null };
 
 		const crypto = require("crypto");
@@ -295,7 +293,7 @@ io.on('connection', (sock) => {
 			if (div > 100000) div = 100000;
 
 			for (let attempt of combinations) {
-				if (!activeProcesses[cid]) break; // Sprawdź, czy proces nie został przerwany
+				if (!activeProcesses[cid]) break;
 
 				const attemptHash = crypto.createHash(algorithm).update(attempt).digest("hex");
 				attempts++;
@@ -324,7 +322,7 @@ io.on('connection', (sock) => {
 				sock.emit("bruteForceProgress", { progress: Math.min(progress, 100), attempts, totalCombinations, found });
 			}
 
-			delete activeProcesses[cid]; // Usuń aktywny proces
+			delete activeProcesses[cid];
 			progressData[cid] = { progress: 100, attempts, totalCombinations, found };
 		}
 
@@ -387,7 +385,6 @@ io.on('connection', (sock) => {
 		}
 	});
 
-	// Endpoint: Pobierz listę słowników
 	sock.on("getDictionaries", () => {
 		fs.readdir(dictionariesPath, (err, files) => {
 			if (err) {
@@ -399,7 +396,6 @@ io.on('connection', (sock) => {
 		});
 	});
 
-	// Endpoint: Wykonaj atak słownikowy
 	sock.on("dictionaryAttack", async (hash, algorithm = "md5", dictionaryName) => {
 		console.log(`[Dictionary Attack] Start: hash=${hash}, algorithm=${algorithm}, dictionary=${dictionaryName}`);
 	
@@ -470,10 +466,17 @@ io.on('connection', (sock) => {
 			sock.emit("dictionaryProgress", dictionaryProgressData[cid]);
 			//console.log(`[Progress] CID: ${cid}, Progress: ${progress}%, Attempts: ${attempts}/${totalCombinations}`);
 		};
+
+		let buffer = "";
 	
 		const processChunk = async (chunk) => {
-			const passwords = chunk.split("\n");
-			for (const password of passwords) {
+			buffer += chunk;
+			const lines = buffer.split("\n");
+			buffer = lines.pop(); 
+
+			//old: const lines = chunk.split("\n");
+
+			for (const password of lines) {
 				if (!dictionaryActiveProcesses[cid] || found) break;
 	
 				attempts++;
@@ -497,17 +500,16 @@ io.on('connection', (sock) => {
 				//console.log(`[Dictionary Attack] Processing chunk of size: ${chunk.length}`);
 				if (!dictionaryActiveProcesses[cid]) {
 					//console.log(`[Dictionary Attack] CID: ${cid}, Stopped by user.`);
-					stream.destroy(); // Zniszcz strumień, gdy użytkownik zatrzyma atak
+					stream.destroy();
 					return;
 				}
 				await processChunk(chunk);
 				if (found) {
 					//console.log(`[Dictionary Attack] CID: ${cid}, Password found.`);
-					stream.destroy(); // Zniszcz strumień po znalezieniu hasła
+					stream.destroy();
 				}
 			});
 			
-			// Obsługa zakończenia strumienia
 			stream.on("end", () => {
 				//console.log(`[Dictionary Attack] CID: ${cid}, Stream ended.`);
 				if (!found) {
@@ -516,7 +518,6 @@ io.on('connection', (sock) => {
 				finalizeAttack();
 			});
 			
-			// Obsługa zniszczenia strumienia (stream.destroy())
 			stream.on("close", () => {
 				console.log(`[Dictionary Attack] CID: ${cid}, Stream closed.`);
 				if (found) {
@@ -527,7 +528,6 @@ io.on('connection', (sock) => {
 				finalizeAttack();
 			});
 			
-			// Finalizacja ataku
 			function finalizeAttack() {
 				dictionaryProgressData[cid] = { progress: 100, attempts, totalCombinations, found };
 				delete dictionaryActiveProcesses[cid];
@@ -544,23 +544,31 @@ io.on('connection', (sock) => {
 			delete dictionaryActiveProcesses[cid];
 		}
 	});
-	
-	
-	
 
-	// Endpoint: Wgraj nowy słownik
 	sock.on("uploadDictionary", (fileName, fileContent) => {
-		const user = translationTab[cid];
-
-		// Sprawdź, czy użytkownik jest adminem
-		if (!user || user.is_admin !== "admin") {
+		if (!permissions(cid, "dictionary_upload")) {
 			sock.emit("uploadDictionaryResult", { success: false, error: "Only admins can upload dictionaries." });
 			return;
 		}
 
+		if (typeof fileName !== "string" || typeof fileContent !== "string") {
+			console.log(typeof fileName);
+			console.log(typeof fileContent);
+			sock.emit("uploadDictionaryResult", { success: false, error: "Invalid file name or content." });
+			return;
+		}
+
+		if (typeof dictionariesPath !== "string") {
+			console.error("[Upload Dictionary] Invalid dictionariesPath:", dictionariesPath);
+			sock.emit("uploadDictionaryResult", { success: false, error: "Invalid dictionaries path configuration." });
+			return;
+		}
+
 		const filePath = path.join(dictionariesPath, fileName);
+
 		fs.writeFile(filePath, fileContent, (err) => {
 			if (err) {
+				console.error("[Upload Dictionary] Failed to write file:", err);
 				sock.emit("uploadDictionaryResult", { success: false, error: "Failed to save dictionary." });
 				return;
 			}
@@ -568,23 +576,8 @@ io.on('connection', (sock) => {
 		});
 	});
 
-
-	//for auth users sth:
-	sock.on("auth_user_only", (some_data) => {
-		if(translationTab[cid].user_id === -1) return;
-		//do sth:
-
-		/*
-			//if in db exist sth like rank/grade, may use only for rank:
-			if(translationTab[cid].db_stats.rank == "Admin"){
-				//do sth
-			}
-		*/
-	})
 });
 
 server.listen(PORT, () => {
 	console.log("Work");
-	console.log("admin", hasher("admin"))
-	console.log("user", hasher("user"))
 });
