@@ -3,7 +3,7 @@
 */
 
 const mysql = require("mysql");
-const opt = require("./../opt.json");
+const opt = require("./../hidden.json");
 
 let db;
 

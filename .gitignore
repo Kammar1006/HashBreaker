@@ -1,4 +1,5 @@
 node_modules/
 logs/
 opt.json
-*.txt
+hidden.json
+rockyou.txt

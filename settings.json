@@ -1,0 +1,23 @@
+{
+    "port": 8005,
+    "db_on": true,
+    "cookie": "PHPSESSID",
+    "anonim":{
+        "bruteforce_attack": true,
+        "bruteforce_max_len": 5,
+        "dictionary_attack": true,
+        "dictionary_upload": false
+    },
+    "auth":{
+        "bruteforce_attack": true,
+        "bruteforce_max_len": 8,
+        "dictionary_attack": true,
+        "dictionary_upload": false
+    },
+    "admin":{
+        "bruteforce_attack": true,
+        "bruteforce_max_len": 12,
+        "dictionary_attack": true,
+        "dictionary_upload": true
+    }
+}

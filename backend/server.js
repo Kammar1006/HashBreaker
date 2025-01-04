@@ -2,7 +2,7 @@
     Created by Kammar1006
 */
 
-const opt = require('../opt.json');
+const opt = require('../settings.json');
 const PORT = opt.port;
 const COOKIE_FLAG = opt.cookie
 
@@ -12,6 +12,7 @@ const socketio = require('socket.io');
 
 const fs = require("fs");
 const path = require("path");
+const readline = require("readline");
 
 const {queryDatabase} = require('./db.js');
 const bcrypt = require("bcrypt");
@@ -64,6 +65,31 @@ const setTranslationTab = (cid) => {
 		};
 	}
 }
+
+const getRole = (cid) => {
+    const user = translationTab[cid];
+    if (user.user_id === -1) return "anonim";
+    if (user.db_stats.is_admin) return "admin";
+    return "auth";
+};
+
+const permissions = (cid, action) => {
+    const role = getRole(cid).toLowerCase();
+    const settings = opt[role];
+
+    if (!settings) {
+        console.error(`[Permissions] Role ${role} not found in settings.`);
+        return false; 
+    }
+
+    if (!(action in settings)) {
+        console.error(`[Permissions] Action ${action} not found for role ${role}.`);
+        return false;
+    }
+
+    return settings[action];
+};
+
 const hasher = (data) => {
 	return bcrypt.hashSync(data, 10);
 }
@@ -194,26 +220,17 @@ io.on('connection', (sock) => {
 		const cid = setCID(sock);
 		const user = translationTab[cid];
 
-		// Sprawdź, czy istnieje już aktywny proces dla tego użytkownika
-		if (activeProcesses[cid]) {
-			sock.emit("bruteForceResult", { success: false, error: "Wait for earlier bruteforce method result" });
-			return;
-		}
-
-		activeProcesses[cid] = true; // Oznacz proces jako aktywny
-		progressData[cid] = { progress: 0, attempts: 0, totalCombinations: 0, found: null };
-
-		// Walidacja i inne ustawienia
-		if (user && user.user_id !== -1) {
-			if (maxLen > 8) {
-				delete activeProcesses[cid];
-				sock.emit("bruteForceResult", { success: false, error: "For auth users max len is 8" });
+		if (user) {
+			if(!permissions(cid, "bruteforce_attack")){
+				sock.emit("bruteForceResult", `Your role (${getRole(cid)} user) have no access for bruteforce attack`);
 				return;
 			}
-		} else {
-			if (maxLen > 5) {
-				delete activeProcesses[cid];
-				sock.emit("bruteForceResult", { success: false, error: "Max len is 5. You may log in to increase max len to 8." });
+		}
+
+		// Walidacja i inne ustawienia
+		if (user) {
+			if(maxLen > permissions(cid, "bruteforce_max_len")){
+				sock.emit("bruteForceResult", `For ${getRole(cid)} users max bruteforce length is ${permissions(cid, "bruteforce_max_len")}`);
 				return;
 			}
 		}
@@ -229,7 +246,18 @@ io.on('connection', (sock) => {
 			return;
 		}
 
+		// Sprawdź, czy istnieje już aktywny proces dla tego użytkownika
+		if (activeProcesses[cid]) {
+			sock.emit("bruteForceResult", { success: false, error: "Wait for earlier bruteforce method result" });
+			return;
+		}
+
+		activeProcesses[cid] = true; // Oznacz proces jako aktywny
+		progressData[cid] = { progress: 0, attempts: 0, totalCombinations: 0, found: null };
+
 		const crypto = require("crypto");
+
+		sock.emit("bruteForceResult", { success: false, error: "Bruteforce started." });
 
 		const calculateTotalCombinations = (charsetLength, maxLen) => {
 			let total = 0;
@@ -375,6 +403,14 @@ io.on('connection', (sock) => {
 	sock.on("dictionaryAttack", async (hash, algorithm = "md5", dictionaryName) => {
 		console.log(`[Dictionary Attack] Start: hash=${hash}, algorithm=${algorithm}, dictionary=${dictionaryName}`);
 	
+		const user = translationTab[cid];
+		if (user) {
+			if(!permissions(cid, "dictionary_attack")){
+				sock.emit("dictionaryAttackResult", `Your role (${getRole(cid)} user) have no access for dictionary attack`);
+				return;
+			}
+		}
+
 		if (!hash || !dictionaryName) {
 			sock.emit("dictionaryAttackResult", { success: false, error: "Invalid parameters." });
 			return;
@@ -389,15 +425,42 @@ io.on('connection', (sock) => {
 		if (!["md5", "sha1", "sha256", "sha512", "ripemd160"].includes(algorithm)) {
 			algorithm = "md5";
 		}
+
+		if (dictionaryActiveProcesses[cid]) {
+			sock.emit("dictionaryAttackResult", { success: false, error: "Wait for earlier dictionary attack result" });
+			return;
+		}
 	
 		const crypto = require("crypto");
 		sock.emit("dictionaryAttackResult", { success: false, error: "Loading Dictionary...." });
-		const totalCombinations = fs.readFileSync(dictionaryPath, "utf-8").split("\n").length;
+		const countLines = async (filePath) => {
+			return new Promise((resolve, reject) => {
+				let lineCount = 0;
+		
+				const stream = fs.createReadStream(filePath);
+				const rl = readline.createInterface({
+					input: stream,
+					crlfDelay: Infinity,
+				});
+		
+				rl.on("line", () => {
+					lineCount++;
+				});
+		
+				rl.on("close", () => {
+					resolve(lineCount);
+				});
+		
+				rl.on("error", (err) => {
+					reject(err);
+				});
+			});
+		};
+		const totalCombinations = await countLines(dictionaryPath);
 		sock.emit("dictionaryAttackResult", { success: false, error: "Dictionary Loaded" });
 		let attempts = 0;
 		let found = null;
-	
-		const cid = setCID(sock);
+
 		dictionaryActiveProcesses[cid] = true;
 		dictionaryProgressData[cid] = { progress: 0, attempts: 0, totalCombinations, found: null };
 	
@@ -431,22 +494,22 @@ io.on('connection', (sock) => {
 			const stream = fs.createReadStream(dictionaryPath, { encoding: "utf-8", highWaterMark: 16 * 1024 });
 	
 			stream.on("data", async (chunk) => {
-				console.log(`[Dictionary Attack] Processing chunk of size: ${chunk.length}`);
+				//console.log(`[Dictionary Attack] Processing chunk of size: ${chunk.length}`);
 				if (!dictionaryActiveProcesses[cid]) {
-					console.log(`[Dictionary Attack] CID: ${cid}, Stopped by user.`);
+					//console.log(`[Dictionary Attack] CID: ${cid}, Stopped by user.`);
 					stream.destroy(); // Zniszcz strumień, gdy użytkownik zatrzyma atak
 					return;
 				}
 				await processChunk(chunk);
 				if (found) {
-					console.log(`[Dictionary Attack] CID: ${cid}, Password found.`);
+					//console.log(`[Dictionary Attack] CID: ${cid}, Password found.`);
 					stream.destroy(); // Zniszcz strumień po znalezieniu hasła
 				}
 			});
 			
 			// Obsługa zakończenia strumienia
 			stream.on("end", () => {
-				console.log(`[Dictionary Attack] CID: ${cid}, Stream ended.`);
+				//console.log(`[Dictionary Attack] CID: ${cid}, Stream ended.`);
 				if (!found) {
 					sock.emit("dictionaryAttackResult", { success: false, error: "Password not found in dictionary." });
 				}
@@ -522,4 +585,6 @@ io.on('connection', (sock) => {
 
 server.listen(PORT, () => {
 	console.log("Work");
+	console.log("admin", hasher("admin"))
+	console.log("user", hasher("user"))
 });
