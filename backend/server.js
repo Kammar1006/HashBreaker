@@ -32,6 +32,8 @@ const dictionariesPath = path.join(__dirname, "dictionaries");
 let translationTab = [];
 let progressData = {};
 let activeProcesses = {};
+let dictionaryProgressData = {};
+let dictionaryActiveProcesses = {};
 
 const setCID = (sock) => {
 	//console.log(sock.request.headers.cookie);
@@ -307,7 +309,6 @@ io.on('connection', (sock) => {
 	});
 
 	sock.on("stopBruteForce", () => {
-		const cid = setCID(sock);
 		if (activeProcesses[cid]) {
 			delete activeProcesses[cid];
 			sock.emit("bruteForceResult", { success: false, error: "Brute-force stopped by user." });
@@ -316,9 +317,16 @@ io.on('connection', (sock) => {
 		}
 	});
 
+	sock.on("stopDictionaryAttack", () => {
+		if (dictionaryActiveProcesses[cid]) {
+			delete dictionaryActiveProcesses[cid];
+			sock.emit("dictionaryAttackResult", { success: false, error: "Dictionary attack stopped by user." });
+		} else {
+			sock.emit("dictionaryAttackResult", { success: false, error: "No active dictionary attack process to stop." });
+		}
+	});
 
 	sock.on("getProgress", () => {
-		const cid = setCID(sock);
 		const data = progressData[cid];
 		if (data) {
 			sock.emit("bruteForceProgress", data);
@@ -327,13 +335,28 @@ io.on('connection', (sock) => {
 		}
 	});
 
+	sock.on("getDictionaryAttackProgress", () => {
+		const data = dictionaryProgressData[cid];
+		if (data) {
+			sock.emit("dictionaryAttackProgress", data);
+		} else {
+			sock.emit("dictionaryAttackProgress", { progress: 0, attempts: 0, totalCombinations: 0, found: null });
+		}
+	});
+
 	sock.on("resumeSession", () => {
-		const cid = setCID(sock);
 		const progress = progressData[cid];
 		if (progress) {
 			sock.emit("bruteForceProgress", progress);
 		} else {
 			sock.emit("bruteForceResult", { success: false, error: "No active session found." });
+		}
+
+		const dictionaryProgress = dictionaryProgressData[cid];
+		if (dictionaryProgress) {
+			sock.emit("dictionaryAttackProgress", dictionaryProgress);
+		} else {
+			sock.emit("dictionaryAttackResult", { success: false, error: "No active session found." });
 		}
 	});
 
@@ -350,57 +373,81 @@ io.on('connection', (sock) => {
 	});
 
 	// Endpoint: Wykonaj atak słownikowy
-	sock.on("dictionaryAttack", (hash, algorithm = "md5", dictionaryName) => {
-		console.log(hash, algorithm, dictionaryName)
+	sock.on("dictionaryAttack", async (hash, algorithm = "md5", dictionaryName) => {
+		console.log(hash, algorithm, dictionaryName);
+	
 		// Walidacja
 		if (!hash || !dictionaryName) {
 			sock.emit("dictionaryAttackResult", { success: false, error: "Invalid parameters." });
 			return;
 		}
-
+	
 		const dictionaryPath = path.join(dictionariesPath, dictionaryName);
 		if (!fs.existsSync(dictionaryPath)) {
 			sock.emit("dictionaryAttackResult", { success: false, error: "Dictionary not found." });
 			return;
 		}
-
+	
 		if (!["md5", "sha1", "sha256", "sha512", "ripemd160"].includes(algorithm)) {
 			algorithm = "md5";
 		}
-
-		// Wykonywanie ataku
+	
 		const crypto = require("crypto");
-		const stream = fs.createReadStream(dictionaryPath, { encoding: "utf-8" });
+		const totalCombinations = fs.readFileSync(dictionaryPath, 'utf-8').split("\n").length; // Liczba linii w słowniku
 		let attempts = 0;
 		let found = null;
-
-		stream.on("data", chunk => {
+	
+		dictionaryActiveProcesses[cid] = true; // Oznacz proces jako aktywny
+		dictionaryProgressData[cid] = { progress: 0, attempts: 0, totalCombinations, found: null };
+	
+		const processChunk = async (chunk) => {
 			const passwords = chunk.split("\n");
 			for (const password of passwords) {
-				if (found) break;
+				if (!dictionaryActiveProcesses[cid] || found) break;
+	
 				attempts++;
-				//console.log(password)
 				const attemptHash = crypto.createHash(algorithm).update(password.trim()).digest("hex");
 				if (attemptHash === hash) {
 					found = password.trim();
-					stream.destroy();
 					break;
 				}
+	
+				if (attempts % 100 === 0) {
+					const progress = ((attempts / totalCombinations) * 100).toFixed(2);
+					dictionaryProgressData[cid] = { progress, attempts, totalCombinations, found };
+					sock.emit("dictionaryProgress", dictionaryProgressData[cid]);
+				}
 			}
-
+		};
+	
+		try {
+			const stream = fs.createReadStream(dictionaryPath, { encoding: "utf-8" });
+	
+			for await (const chunk of stream) {
+				if (!dictionaryActiveProcesses[cid]) {
+					sock.emit("dictionaryAttackResult", { success: false, error: "Attack stopped by user." });
+					delete dictionaryActiveProcesses[cid];
+					return;
+				}
+	
+				await processChunk(chunk);
+	
+				if (found) break;
+			}
+	
 			if (found) {
 				sock.emit("dictionaryAttackResult", { success: true, result: found });
-				return;
+			} else {
+				sock.emit("dictionaryAttackResult", { success: false, error: "Password not found in dictionary." });
 			}
-		});
-		stream.on("end", () => {
-			sock.emit("dictionaryAttackResult", { success: false, error: "Password not found in dictionary." });
-		});
-
-		stream.on("error", err => {
+		} catch (err) {
 			sock.emit("dictionaryAttackResult", { success: false, error: "Error reading dictionary." });
-		});
+		} finally {
+			dictionaryProgressData[cid] = { progress: 100, attempts, totalCombinations, found };
+			delete dictionaryActiveProcesses[cid];
+		}
 	});
+	
 
 	// Endpoint: Wgraj nowy słownik
 	sock.on("uploadDictionary", (fileName, fileContent) => {

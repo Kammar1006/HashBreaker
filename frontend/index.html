@@ -124,14 +124,28 @@
                 sock.emit("getProgress");
             });
 
+            document.querySelector("#checkProgress_2").addEventListener("click", () => {
+                sock.emit("getDictionaryAttackProgress");
+            });
+
             sock.on("bruteForceProgress", (data) => {
                 document.querySelector("#progress").textContent = `Progress: ${data.progress}% (Attempts: ${data.attempts}/${data.totalCombinations})`;
                 console.log(data);
                 document.querySelector("#result").textContent = `Result: ${data.found}`;
             });
 
+            sock.on("dictionaryAttackProgress", (data) => {
+                document.querySelector("#progress_2").textContent = `Progress: ${data.progress}% (Attempts: ${data.attempts}/${data.totalCombinations})`;
+                console.log(data);
+                document.querySelector("#result_2").textContent = `Result: ${data.found}`;
+            });
+
             document.querySelector("#stopBruteForce").addEventListener("click", () => {
                 sock.emit("stopBruteForce");
+            });
+
+            document.querySelector("#stopDictionaryAttack").addEventListener("click", () => {
+                sock.emit("stopDictionaryAttack");
             });
 
             // Pobierz listę słowników
