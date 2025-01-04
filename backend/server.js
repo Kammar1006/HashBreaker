@@ -470,11 +470,7 @@ io.on('connection', (sock) => {
 		let buffer = "";
 	
 		const processChunk = async (chunk) => {
-			buffer += chunk;
-			const lines = buffer.split("\n");
-			buffer = lines.pop(); 
-
-			//old: const lines = chunk.split("\n");
+			const lines = chunk.split("\n");
 
 			for (const password of lines) {
 				if (!dictionaryActiveProcesses[cid] || found) break;
