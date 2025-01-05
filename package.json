@@ -6,8 +6,8 @@
     "socket.io": "^4.8.1"
   },
   "name": "hash-breaker",
-  "description": "",
-  "version": "0.9",
+  "description": "Web-based application designed to perform brute-force and dictionary attacks on password hashes",
+  "version": "1.0.0",
   "main": "index.js",
   "devDependencies": {},
   "scripts": {
